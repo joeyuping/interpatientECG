@@ -228,8 +228,6 @@ class System():
     def train_loop(self, dataloader, desc=f"train"):
         overall_gt = []
         overall_predicts = []
-        overall_gt_13 = []
-        overall_predicts_13 = []
         running_loss = 0.0
 
         for data in tqdm(dataloader,desc=desc):
@@ -245,14 +243,6 @@ class System():
             
             _, predict = torch.max(classes.data, 1)
 
-            # conversion = [0,0,0,0,0,1,1,1,1,2,2,3,4]
-            
-            overall_gt_13.extend(labels.tolist())
-            overall_predicts_13.extend(predict.tolist())
-
-            # labels = [conversion[l] for l in labels]
-            # predict = [conversion[l] for l in predict]
-            
             overall_gt.extend(labels.tolist())
             overall_predicts.extend(predict.tolist())
             running_loss += classes_loss.item() 
@@ -261,7 +251,7 @@ class System():
 
             self.optimizer.step()
     
-        return overall_gt, overall_predicts, overall_gt_13, overall_predicts_13, running_loss
+        return overall_gt, overall_predicts, running_loss
 
     def train(self):
         print(f"Training on {self.device}")
@@ -273,7 +263,7 @@ class System():
             print("")
             print(f"Epoch {epoch+1}/{self.epochs}")
 
-            overall_gt, overall_predicts, overall_gt_13, overall_predicts_13, running_loss = self.train_loop(self.train_dataloader)
+            overall_gt, overall_predicts, running_loss = self.train_loop(self.train_dataloader)
 
             classes_loss_train = running_loss / len(self.train_dataloader)
             
@@ -315,8 +305,6 @@ class System():
         self.model.eval()
         gt = []
         predicts = []
-        gt_13 = []
-        predicts_13 = []
         running_loss = 0.0
         wrongs = []
         features_list = []
@@ -334,22 +322,11 @@ class System():
 
             _, predict = torch.max(classes.data, 1)
 
-            # conversion = [0,0,0,0,0,1,1,1,1,2,2,3,4]
-
-            # labels = [conversion[l] for l in labels]
-            # predict = [conversion[l] for l in predict]
-
-            # gt_13.extend(labels.tolist())
-            # predicts_13.extend(predict.tolist())
-
             gt.extend(labels.tolist())
             predicts.extend(predict.tolist())
             running_loss += loss.item()
             features_list.append(features)
             classes_list.append(classes)
-
-            # labels_5 = torch.tensor(labels_5)
-            # predict_5 = torch.tensor(predict_5)
 
             wrong_idx = (predict != labels).nonzero().squeeze()
             record_names = record_names.to(self.device)
@@ -408,8 +385,6 @@ class System():
             # confusion matrix
             if print_cm:
                 from sklearn.metrics import confusion_matrix
-                # cm_13 = confusion_matrix(gt_13, predicts_13)
-                # print(cm_13)
                 cm = confusion_matrix(overall_gt, overall_predicts)
                 print(cm)
             
