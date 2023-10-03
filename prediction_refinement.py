@@ -1,9 +1,10 @@
 import torch
 import numpy as np
-from sklearn.cluster import DBSCAN, HDBSCAN
+from sklearn.cluster import DBSCAN, HDBSCAN, OPTICS, SpectralClustering, KMeans
+from sklearn.mixture import GaussianMixture
 from sklearn.metrics import pairwise_distances_argmin_min
 
-def prediction_refinement(features_list, predicts, clustering_method='HDBSCAN', eps=0.5, min_samples=5, noise_handling='merge_most'):
+def prediction_refinement(features, predicts, clustering_method, eps=0.5, min_samples=5, min_cluster_size=5, noise_handling='merge_most'):
     
     '''
     Arguments:
@@ -14,7 +15,7 @@ def prediction_refinement(features_list, predicts, clustering_method='HDBSCAN', 
         noise_handling: 'merge_most' or 'merge_all' or 'retain_all'
     '''
 
-    features = torch.cat(features_list, dim=0).cpu().numpy()
+    features = features.cpu().numpy()
     predicts = np.array(predicts)
 
     # clustering
@@ -22,15 +23,28 @@ def prediction_refinement(features_list, predicts, clustering_method='HDBSCAN', 
     if clustering_method == 'DBSCAN':
         pred_cluster = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(features)
     elif clustering_method == 'HDBSCAN':
-        pred_cluster = HDBSCAN(allow_single_cluster=True).fit_predict(features)
+        pred_cluster = HDBSCAN(allow_single_cluster=True, min_samples=min_samples, min_cluster_size=min_cluster_size).fit_predict(features)
+    elif clustering_method == 'OPTICS':
+        pred_cluster = OPTICS(max_eps=eps, cluster_method="xi").fit_predict(features)
+    elif clustering_method == 'SPECTRAL_CLUSTERING':
+        pred_cluster = SpectralClustering(n_clusters=3, assign_labels="cluster_qr", random_state=0).fit_predict(features)
+    elif clustering_method == 'KMEANS':
+        pred_cluster = KMeans(n_clusters=3, random_state=0).fit_predict(features)
+    elif clustering_method == 'GAUSSIAN_MIXTURE':
+        pred_cluster = GaussianMixture(n_components=3, random_state=0).fit_predict(features)
     else:
-        raise ValueError('clustering_method should be either DBSCAN or HDBSCAN')
+        raise ValueError('clustering_method not recognized')
+    
+    # # keep only largest cluster, set others to -1
+    # largest_cluster = np.argmax(np.bincount(pred_cluster[pred_cluster != -1]))
+    # pred_cluster[pred_cluster != largest_cluster] = -1
+    # pred_cluster[pred_cluster == largest_cluster] = 0
 
     # noise handling
     if noise_handling == 'retain_all':
         pass
     else:
-        if -1 in pred_cluster:
+        if -1 in pred_cluster and len(np.unique(pred_cluster)) > 1:
             argmin, min = pairwise_distances_argmin_min(features[pred_cluster == -1], features[pred_cluster != -1])
             replace = pred_cluster[pred_cluster != -1][argmin]
             if noise_handling == 'merge_most':
@@ -56,4 +70,4 @@ def prediction_refinement(features_list, predicts, clustering_method='HDBSCAN', 
         cluster_prediction = max(pred_dict, key=pred_dict.get)
         predicts[pred_cluster == i] = cluster_prediction
     
-    return predicts
+    return predicts, pred_cluster
